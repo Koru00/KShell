@@ -4,10 +4,11 @@ use std::fmt::format;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use std::process::Command as ProcessCommand;
+use std::process::{Command as ProcessCommand, CommandArgs};
 
 pub trait Command {
     fn name(&self) -> &'static str;
+    fn syntax(&self) -> &'static str { "" }
     fn execute(&self, shell: &Shell, args: &[String]) -> Result<(), String>;
 }
 
@@ -15,6 +16,10 @@ pub struct CdCommand;
 impl Command for CdCommand {
     fn name(&self) -> &'static str {
         "cd"
+    }
+
+    fn syntax(&self) -> &'static str {
+        "cd [[-Path] <string>]"
     }
 
     fn execute(&self, Shell: &Shell, args: &[String]) -> Result<(), String> {
@@ -28,6 +33,10 @@ impl Command for CdCommand {
 pub struct EchoCommand;
 impl Command for EchoCommand {
     fn name(&self) -> &'static str { "echo" }
+
+    fn syntax(&self) -> &'static str {
+        "echo [-InputObject] <psobject[]>"
+    }
 
     fn execute(&self, shell: &Shell, args: &[String]) -> Result<(), String> {
         let expanded: Vec<String> = args.iter().map(|arg| {
@@ -48,6 +57,10 @@ pub struct TypeCommand;
 impl Command for TypeCommand {
     fn name(&self) -> &'static str {
         "type"
+    }
+
+    fn syntax(&self) -> &'static str {
+        "type [[-Path] <string>]"
     }
 
     fn execute(&self, shell: &Shell, args: &[String]) -> Result<(), String> {
@@ -82,6 +95,10 @@ pub struct ExecCommand;
 impl Command for ExecCommand {
     fn name(&self) -> &'static str {
         "exec"
+    }
+
+    fn syntax(&self) -> &'static str {
+        "exec [[-ProgramName] <string>] [[-Args] <string[]>]"
     }
 
     fn execute(&self, _shell: &Shell, args: &[String]) -> Result<(), String> {
@@ -129,6 +146,36 @@ impl Command for ExecCommand {
     }
 }
 
+pub struct HelpCommand;
+impl Command for HelpCommand {
+    fn name(&self) -> &'static str {
+        "help"
+    }
+
+    fn syntax(&self) -> &'static str {
+        "help [[-Name] <string>]"
+    }
+
+    fn execute(&self, shell: &Shell, args: &[String]) -> Result<(), String> {
+        if args.is_empty() {
+            println!("Available commands:");
+            for (name, cmd) in &shell.commands {
+                println!("  {:<10} {}", name, cmd.syntax());
+            }
+            return Ok(());
+        }
+
+        let cmd_name = &args[0];
+        match shell.commands.get(cmd_name.as_str()) {
+            Some(cmd) => {
+                println!("{}: {}", cmd.name(), cmd.syntax());
+                return Ok(());
+            }
+            None => Err(format!("no such command '{}'", cmd_name)),
+        }
+    }
+}
+
 pub struct Shell {
     commands: HashMap<&'static str, Box<dyn Command>>,
     last_status: i32,
@@ -141,6 +188,7 @@ impl Shell {
         commands.insert(EchoCommand.name(), Box::new(EchoCommand));
         commands.insert(TypeCommand.name(), Box::new(TypeCommand));
         commands.insert(ExecCommand.name(), Box::new(ExecCommand));
+        commands.insert(HelpCommand.name(), Box::new(HelpCommand));
 
         Shell {
             commands,
